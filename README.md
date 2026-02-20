@@ -31,3 +31,37 @@ claude mcp add nba-stats -- nba-stats-mcp
 - **get_game_scores** — Today's/historical game scores
 - **get_box_score** — Detailed box score for a game
 - **get_advanced_stats** — Tracking, hustle, defense, play type data
+
+## Example Questions
+
+Simple lookups:
+- "What are the current NBA standings?"
+- "Who leads the league in assists this season?"
+- "What's the Lakers roster?"
+- "What were today's NBA scores?"
+
+Player deep dives:
+- "Compare Steph Curry's home vs away splits this season"
+- "Show me LeBron's month-by-month scoring averages this year"
+- "How has Jokic's usage rate changed over his career?"
+- "What are Luka's stats in clutch situations?"
+
+Multi-tool analytical questions:
+- "Which rookie is having the best season by PER?"
+- "Who are the top 10 isolation scorers and how efficient are they?"
+- "Find all international players averaging 20+ points this season"
+- "How do the top 5 assist leaders compare in turnover rate?"
+- "Which bench players from the Eastern Conference have the highest +/- this month?"
+- "What's the best-performing Duke alumni in the league right now?"
+
+Advanced / tracking data:
+- "Who drives to the basket the most per game and what's their efficiency?"
+- "Which players lead the league in hustle stats like deflections and loose balls?"
+- "How do the top rim protectors compare in contested shots at the rim?"
+- "Who are the best catch-and-shoot players by 3PT% with at least 4 attempts per game?"
+- "Which players generate the most points as pick-and-roll ball handlers?"
+
+Game-specific analysis:
+- "Break down last night's Celtics-Lakers box score — who had the best plus/minus?"
+- "Show me Giannis's game log for the last 2 weeks"
+- "How have the Warriors performed on the road this season?"
