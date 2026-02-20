@@ -7,6 +7,47 @@ from nba_stats_mcp.server import mcp
 from nba_stats_mcp.helpers import rate_limit, df_to_records
 
 
+# Key columns to keep per stat type (drop IDs, percentages, and noise)
+_HUSTLE_COLS = [
+    "PLAYER_NAME", "TEAM_ABBREVIATION", "AGE", "G", "MIN",
+    "CONTESTED_SHOTS", "CONTESTED_SHOTS_2PT", "CONTESTED_SHOTS_3PT",
+    "DEFLECTIONS", "CHARGES_DRAWN", "SCREEN_ASSISTS", "SCREEN_AST_PTS",
+    "LOOSE_BALLS_RECOVERED", "OFF_LOOSE_BALLS_RECOVERED", "DEF_LOOSE_BALLS_RECOVERED",
+    "BOX_OUTS",
+]
+
+_TRACKING_KEEP = [
+    "PLAYER_NAME", "TEAM_ABBREVIATION", "AGE", "G", "MIN",
+]
+
+_DEFENSE_COLS = [
+    "PLAYER_NAME", "TEAM_ABBREVIATION", "AGE", "G",
+    "CLOSE_DEF_PERSON_ID",  # will be dropped, just listing what exists
+]
+
+
+def _trim_df(df, keep_cols=None, top_n=50, sort_by=None, ascending=False):
+    """Trim a dataframe: select columns, sort, and limit rows."""
+    if keep_cols:
+        available = [c for c in keep_cols if c in df.columns]
+        # Also keep any stat columns not in the ID/noise list
+        drop_ids = {"PLAYER_ID", "TEAM_ID", "CLOSE_DEF_PERSON_ID"}
+        for c in df.columns:
+            if c not in drop_ids and c not in available:
+                available.append(c)
+        # Actually just drop ID columns
+        drop_cols = [c for c in df.columns if c in drop_ids]
+        df = df.drop(columns=drop_cols, errors="ignore")
+    else:
+        drop_ids = {"PLAYER_ID", "TEAM_ID", "CLOSE_DEF_PERSON_ID"}
+        df = df.drop(columns=[c for c in drop_ids if c in df.columns], errors="ignore")
+
+    if sort_by and sort_by in df.columns:
+        df = df.sort_values(sort_by, ascending=ascending)
+
+    return df.head(top_n)
+
+
 @mcp.tool(
     annotations=ToolAnnotations(readOnlyHint=True),
     title="Get Advanced Stats",
@@ -19,6 +60,7 @@ def get_advanced_stats(
     pt_measure_type: str = "SpeedDistance",
     defense_category: str = "Overall",
     play_type: str = "Isolation",
+    top_n: int = 50,
 ) -> list[dict]:
     """Get advanced NBA stats: player tracking, hustle, defense, or play type data.
 
@@ -34,19 +76,21 @@ def get_advanced_stats(
             "Less Than 6Ft", "Greater Than 15Ft"
         play_type: For playtype only — "Isolation", "Transition", "PRBallHandler",
             "PRRollman", "Postup", "Spotup", "Handoff", "Cut", "OffScreen", "OffRebound"
+        top_n: Number of players to return (default 50, max 150). Results are sorted by the most relevant stat.
 
     Returns:
-        Advanced stat data for all qualifying players.
+        Advanced stat data for top players.
     """
+    top_n = min(max(top_n, 1), 150)
     try:
         if stat_type == "tracking":
-            return _get_tracking_stats(season, per_mode, season_type, pt_measure_type)
+            return _get_tracking_stats(season, per_mode, season_type, pt_measure_type, top_n)
         elif stat_type == "hustle":
-            return _get_hustle_stats(season, per_mode, season_type)
+            return _get_hustle_stats(season, per_mode, season_type, top_n)
         elif stat_type == "defense":
-            return _get_defense_stats(season, per_mode, season_type, defense_category)
+            return _get_defense_stats(season, per_mode, season_type, defense_category, top_n)
         elif stat_type == "playtype":
-            return _get_playtype_stats(season, season_type, play_type)
+            return _get_playtype_stats(season, season_type, play_type, top_n)
         else:
             raise ToolError(
                 f"Unknown stat_type '{stat_type}'. "
@@ -59,7 +103,7 @@ def get_advanced_stats(
 
 
 def _get_tracking_stats(
-    season: str, per_mode: str, season_type: str, pt_measure_type: str
+    season: str, per_mode: str, season_type: str, pt_measure_type: str, top_n: int
 ) -> list[dict]:
     from nba_api.stats.endpoints import LeagueDashPtStats
 
@@ -72,10 +116,11 @@ def _get_tracking_stats(
         player_or_team="Player",
     )
     df = stats.get_data_frames()[0]
-    return df_to_records(df)
+    df = _trim_df(df, top_n=top_n)
+    return df_to_records(df, max_rows=top_n)
 
 
-def _get_hustle_stats(season: str, per_mode: str, season_type: str) -> list[dict]:
+def _get_hustle_stats(season: str, per_mode: str, season_type: str, top_n: int) -> list[dict]:
     from nba_api.stats.endpoints import LeagueHustleStatsPlayer
 
     rate_limit()
@@ -85,11 +130,12 @@ def _get_hustle_stats(season: str, per_mode: str, season_type: str) -> list[dict
         season_type_all_star=season_type,
     )
     df = stats.get_data_frames()[0]
-    return df_to_records(df)
+    df = _trim_df(df, top_n=top_n, sort_by="DEFLECTIONS")
+    return df_to_records(df, max_rows=top_n)
 
 
 def _get_defense_stats(
-    season: str, per_mode: str, season_type: str, defense_category: str
+    season: str, per_mode: str, season_type: str, defense_category: str, top_n: int
 ) -> list[dict]:
     from nba_api.stats.endpoints import LeagueDashPtDefend
 
@@ -101,11 +147,12 @@ def _get_defense_stats(
         defense_category=defense_category,
     )
     df = stats.get_data_frames()[0]
-    return df_to_records(df)
+    df = _trim_df(df, top_n=top_n)
+    return df_to_records(df, max_rows=top_n)
 
 
 def _get_playtype_stats(
-    season: str, season_type: str, play_type: str
+    season: str, season_type: str, play_type: str, top_n: int
 ) -> list[dict]:
     from nba_api.stats.endpoints import SynergyPlayTypes
 
@@ -118,4 +165,5 @@ def _get_playtype_stats(
         type_grouping_nullable="offensive",
     )
     df = stats.get_data_frames()[0]
-    return df_to_records(df)
+    df = _trim_df(df, top_n=top_n)
+    return df_to_records(df, max_rows=top_n)

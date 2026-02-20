@@ -104,6 +104,7 @@ def get_league_player_stats(
     outcome: str = "",
     location: str = "",
     shot_clock_range: str = "",
+    top_n: int = 75,
 ) -> list[dict]:
     """Get stats for all players in the league with powerful filtering options.
 
@@ -133,56 +134,64 @@ def get_league_player_stats(
         outcome: "W" for wins only, "L" for losses only, "" for all
         location: "Home", "Road", or "" for all
         shot_clock_range: e.g. "24-22", "22-18 Very Early", "18-15 Early", "15-7 Average", "7-4 Late", "4-0 Very Late"
+        top_n: Number of players to return (default 75, max 200)
 
     Returns:
-        Stats for every player matching the filters (up to 200 rows).
+        Stats for top players matching the filters.
     """
     from nba_api.stats.endpoints import LeagueDashPlayerStats
 
     try:
         rate_limit()
+        top_n = min(max(top_n, 1), 200)
+
         kwargs = dict(
             season=season,
-            measure_type_detailed=measure_type,
+            measure_type_detailed_defense=measure_type,
             per_mode_detailed=per_mode,
             season_type_all_star=season_type,
-            last_n_games=last_n_games,
-            month=month,
+            last_n_games=str(last_n_games),
+            month=str(month),
             opponent_team_id=opponent_team_id,
         )
 
-        # Only pass non-empty optional filters
         if player_position:
-            kwargs["player_position_abbreviation"] = player_position
+            kwargs["player_position_abbreviation_nullable"] = player_position
         if conference:
-            kwargs["conference"] = conference
+            kwargs["conference_nullable"] = conference
         if division:
-            kwargs["division"] = division
+            kwargs["division_simple_nullable"] = division
         if starter_bench:
-            kwargs["starter_bench"] = starter_bench
+            kwargs["starter_bench_nullable"] = starter_bench
         if player_experience:
-            kwargs["player_experience"] = player_experience
+            kwargs["player_experience_nullable"] = player_experience
         if college:
-            kwargs["college"] = college
+            kwargs["college_nullable"] = college
         if country:
-            kwargs["country"] = country
+            kwargs["country_nullable"] = country
         if draft_year:
-            kwargs["draft_year"] = draft_year
+            kwargs["draft_year_nullable"] = draft_year
         if draft_pick:
-            kwargs["draft_pick"] = draft_pick
+            kwargs["draft_pick_nullable"] = draft_pick
         if height:
-            kwargs["height"] = height
+            kwargs["height_nullable"] = height
         if weight:
-            kwargs["weight"] = weight
+            kwargs["weight_nullable"] = weight
         if outcome:
-            kwargs["outcome"] = outcome
+            kwargs["outcome_nullable"] = outcome
         if location:
-            kwargs["location"] = location
+            kwargs["location_nullable"] = location
         if shot_clock_range:
-            kwargs["shot_clock_range"] = shot_clock_range
+            kwargs["shot_clock_range_nullable"] = shot_clock_range
 
         stats = LeagueDashPlayerStats(**kwargs)
         df = stats.get_data_frames()[0]
-        return df_to_records(df)
+
+        # Drop ID and RANK columns to reduce payload
+        drop_cols = [c for c in df.columns if c in ("PLAYER_ID", "TEAM_ID") or c.endswith("_RANK")]
+        if drop_cols:
+            df = df.drop(columns=drop_cols)
+
+        return df_to_records(df, max_rows=top_n)
     except Exception as e:
         raise ToolError(f"Failed to get league player stats: {e}")
