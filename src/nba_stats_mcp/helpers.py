@@ -12,6 +12,7 @@ from nba_api.stats.static import teams as static_teams
 _rate_lock = threading.Lock()
 _last_call_time = 0.0
 RATE_LIMIT_SECONDS = 0.6
+API_TIMEOUT = 15  # seconds — fail fast instead of hanging
 
 
 def rate_limit():

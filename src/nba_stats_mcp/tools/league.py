@@ -4,7 +4,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from nba_stats_mcp.server import mcp
-from nba_stats_mcp.helpers import rate_limit, df_to_records
+from nba_stats_mcp.helpers import rate_limit, df_to_records, API_TIMEOUT
 
 
 @mcp.tool(
@@ -31,6 +31,7 @@ def get_standings(
         standings = LeagueStandingsV3(
             season=season,
             season_type=season_type,
+            timeout=API_TIMEOUT,
         )
         df = standings.get_data_frames()[0]
         return df_to_records(df, max_rows=30)
@@ -70,6 +71,7 @@ def get_league_leaders(
             season=season,
             per_mode48=per_mode,
             season_type_all_star=season_type,
+            timeout=API_TIMEOUT,
         )
         df = leaders.get_data_frames()[0]
         top_n = min(top_n, 100)
@@ -134,7 +136,7 @@ def get_league_player_stats(
         outcome: "W" for wins only, "L" for losses only, "" for all
         location: "Home", "Road", or "" for all
         shot_clock_range: e.g. "24-22", "22-18 Very Early", "18-15 Early", "15-7 Average", "7-4 Late", "4-0 Very Late"
-        top_n: Number of players to return (default 75, max 200)
+        top_n: Number of players to return (default 75, max 100)
 
     Returns:
         Stats for top players matching the filters.
@@ -143,7 +145,7 @@ def get_league_player_stats(
 
     try:
         rate_limit()
-        top_n = min(max(top_n, 1), 200)
+        top_n = min(max(top_n, 1), 100)
 
         kwargs = dict(
             season=season,
@@ -184,13 +186,26 @@ def get_league_player_stats(
         if shot_clock_range:
             kwargs["shot_clock_range_nullable"] = shot_clock_range
 
+        kwargs["timeout"] = API_TIMEOUT
         stats = LeagueDashPlayerStats(**kwargs)
         df = stats.get_data_frames()[0]
 
-        # Drop ID and RANK columns to reduce payload
-        drop_cols = [c for c in df.columns if c in ("PLAYER_ID", "TEAM_ID") or c.endswith("_RANK")]
-        if drop_cols:
-            df = df.drop(columns=drop_cols)
+        # Keep only core columns to stay within MCP output limits (~25K char max)
+        core_cols = [
+            "PLAYER_NAME", "TEAM_ABBREVIATION", "AGE", "GP", "MIN",
+            "PTS", "REB", "AST", "STL", "BLK", "TOV",
+            "FG_PCT", "FG3_PCT", "FT_PCT", "PLUS_MINUS",
+        ]
+        keep = [c for c in core_cols if c in df.columns]
+        # For non-Base measure types, also keep any columns not in the drop list
+        if measure_type != "Base":
+            drop_always = {"PLAYER_ID", "TEAM_ID", "NICKNAME", "W", "L", "W_PCT",
+                           "BLKA", "PF", "PFD", "NBA_FANTASY_PTS", "DD2", "TD3",
+                           "WNBA_FANTASY_PTS", "TEAM_COUNT", "FTM", "FTA"}
+            for c in df.columns:
+                if c not in keep and c not in drop_always and not c.endswith("_RANK"):
+                    keep.append(c)
+        df = df[[c for c in keep if c in df.columns]]
 
         return df_to_records(df, max_rows=top_n)
     except Exception as e:

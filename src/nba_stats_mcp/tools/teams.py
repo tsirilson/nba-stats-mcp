@@ -4,7 +4,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from nba_stats_mcp.server import mcp
-from nba_stats_mcp.helpers import resolve_team, get_team_id, rate_limit, df_to_records
+from nba_stats_mcp.helpers import resolve_team, get_team_id, rate_limit, df_to_records, API_TIMEOUT
 
 
 @mcp.tool(
@@ -56,6 +56,7 @@ def get_team_stats(
             team_id=team_id,
             per_mode_simple=per_mode,
             season_type_all_star=season_type,
+            timeout=API_TIMEOUT,
         )
         df = stats.get_data_frames()[0]
         return df_to_records(df, max_rows=100)
@@ -99,6 +100,7 @@ def get_team_game_log(
             season_type_all_star=season_type,
             date_from_nullable=date_from,
             date_to_nullable=date_to,
+            timeout=API_TIMEOUT,
         )
         df = log.get_data_frames()[0]
         return df_to_records(df)
@@ -130,7 +132,7 @@ def get_team_roster(
     try:
         team_id = get_team_id(team)
         rate_limit()
-        roster = CommonTeamRoster(team_id=team_id, season=season)
+        roster = CommonTeamRoster(team_id=team_id, season=season, timeout=API_TIMEOUT)
         dfs = roster.get_data_frames()
 
         result = {}

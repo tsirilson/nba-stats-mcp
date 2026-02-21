@@ -4,7 +4,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from nba_stats_mcp.server import mcp
-from nba_stats_mcp.helpers import resolve_player, rate_limit, df_to_records
+from nba_stats_mcp.helpers import resolve_player, rate_limit, df_to_records, API_TIMEOUT
 
 
 @mcp.tool(
@@ -45,7 +45,7 @@ def get_player_info(player_id: str) -> dict:
 
     try:
         rate_limit()
-        info = CommonPlayerInfo(player_id=player_id)
+        info = CommonPlayerInfo(player_id=player_id, timeout=API_TIMEOUT)
         dfs = info.get_data_frames()
 
         result = {}
@@ -79,7 +79,7 @@ def get_player_stats(
 
     try:
         rate_limit()
-        career = PlayerCareerStats(player_id=player_id, per_mode36=per_mode)
+        career = PlayerCareerStats(player_id=player_id, per_mode36=per_mode, timeout=API_TIMEOUT)
         dfs = career.get_data_frames()
 
         result = {}
@@ -130,6 +130,7 @@ def get_player_game_log(
             season_type_all_star=season_type,
             date_from_nullable=date_from,
             date_to_nullable=date_to,
+            timeout=API_TIMEOUT,
         )
         df = log.get_data_frames()[0]
         return df_to_records(df)
@@ -171,6 +172,7 @@ def get_player_splits(
             measure_type_detailed=measure_type,
             per_mode_detailed=per_mode,
             season_type_playoffs=season_type,
+            timeout=API_TIMEOUT,
         )
         dfs = splits.get_data_frames()
 

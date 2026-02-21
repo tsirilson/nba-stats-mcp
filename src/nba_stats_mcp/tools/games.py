@@ -4,7 +4,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from nba_stats_mcp.server import mcp
-from nba_stats_mcp.helpers import rate_limit, df_to_records
+from nba_stats_mcp.helpers import rate_limit, df_to_records, API_TIMEOUT
 
 
 @mcp.tool(
@@ -30,7 +30,7 @@ def get_game_scores(date: str = "") -> dict:
             game_date = date
 
         rate_limit()
-        scoreboard = ScoreboardV2(game_date=game_date)
+        scoreboard = ScoreboardV2(game_date=game_date, timeout=API_TIMEOUT)
         dfs = scoreboard.get_data_frames()
 
         result = {}
@@ -69,7 +69,7 @@ def get_box_score(
 
     try:
         rate_limit()
-        box = BoxScoreTraditionalV3(game_id=game_id)
+        box = BoxScoreTraditionalV3(game_id=game_id, timeout=API_TIMEOUT)
         dfs = box.get_data_frames()
 
         result = {}
@@ -82,7 +82,7 @@ def get_box_score(
             from nba_api.stats.endpoints import BoxScoreAdvancedV3
 
             rate_limit()
-            adv = BoxScoreAdvancedV3(game_id=game_id)
+            adv = BoxScoreAdvancedV3(game_id=game_id, timeout=API_TIMEOUT)
             adv_dfs = adv.get_data_frames()
             if len(adv_dfs) > 0 and not adv_dfs[0].empty:
                 result["player_advanced"] = df_to_records(adv_dfs[0], max_rows=50)

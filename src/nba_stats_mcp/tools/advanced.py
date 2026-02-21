@@ -4,41 +4,28 @@ from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from nba_stats_mcp.server import mcp
-from nba_stats_mcp.helpers import rate_limit, df_to_records
+from nba_stats_mcp.helpers import rate_limit, df_to_records, API_TIMEOUT
 
 
-# Key columns to keep per stat type (drop IDs, percentages, and noise)
+# Key columns to keep per stat type — trim noise to stay under MCP output limits
 _HUSTLE_COLS = [
     "PLAYER_NAME", "TEAM_ABBREVIATION", "AGE", "G", "MIN",
-    "CONTESTED_SHOTS", "CONTESTED_SHOTS_2PT", "CONTESTED_SHOTS_3PT",
-    "DEFLECTIONS", "CHARGES_DRAWN", "SCREEN_ASSISTS", "SCREEN_AST_PTS",
-    "LOOSE_BALLS_RECOVERED", "OFF_LOOSE_BALLS_RECOVERED", "DEF_LOOSE_BALLS_RECOVERED",
-    "BOX_OUTS",
+    "CONTESTED_SHOTS", "DEFLECTIONS", "CHARGES_DRAWN",
+    "SCREEN_ASSISTS", "SCREEN_AST_PTS",
+    "LOOSE_BALLS_RECOVERED", "BOX_OUTS",
 ]
 
-_TRACKING_KEEP = [
-    "PLAYER_NAME", "TEAM_ABBREVIATION", "AGE", "G", "MIN",
-]
-
-_DEFENSE_COLS = [
-    "PLAYER_NAME", "TEAM_ABBREVIATION", "AGE", "G",
-    "CLOSE_DEF_PERSON_ID",  # will be dropped, just listing what exists
-]
+# Columns to always drop from tracking stats (keep the sport-specific ones)
+_TRACKING_DROP = {"PLAYER_ID", "TEAM_ID", "W", "L"}
 
 
 def _trim_df(df, keep_cols=None, top_n=50, sort_by=None, ascending=False):
     """Trim a dataframe: select columns, sort, and limit rows."""
     if keep_cols:
-        available = [c for c in keep_cols if c in df.columns]
-        # Also keep any stat columns not in the ID/noise list
-        drop_ids = {"PLAYER_ID", "TEAM_ID", "CLOSE_DEF_PERSON_ID"}
-        for c in df.columns:
-            if c not in drop_ids and c not in available:
-                available.append(c)
-        # Actually just drop ID columns
-        drop_cols = [c for c in df.columns if c in drop_ids]
-        df = df.drop(columns=drop_cols, errors="ignore")
+        # Only keep specified columns
+        df = df[[c for c in keep_cols if c in df.columns]]
     else:
+        # Drop ID columns
         drop_ids = {"PLAYER_ID", "TEAM_ID", "CLOSE_DEF_PERSON_ID"}
         df = df.drop(columns=[c for c in drop_ids if c in df.columns], errors="ignore")
 
@@ -114,8 +101,10 @@ def _get_tracking_stats(
         season_type_all_star=season_type,
         pt_measure_type=pt_measure_type,
         player_or_team="Player",
+        timeout=API_TIMEOUT,
     )
     df = stats.get_data_frames()[0]
+    df = df.drop(columns=[c for c in _TRACKING_DROP if c in df.columns], errors="ignore")
     df = _trim_df(df, top_n=top_n)
     return df_to_records(df, max_rows=top_n)
 
@@ -128,9 +117,10 @@ def _get_hustle_stats(season: str, per_mode: str, season_type: str, top_n: int) 
         season=season,
         per_mode_time=per_mode,
         season_type_all_star=season_type,
+        timeout=API_TIMEOUT,
     )
     df = stats.get_data_frames()[0]
-    df = _trim_df(df, top_n=top_n, sort_by="DEFLECTIONS")
+    df = _trim_df(df, keep_cols=_HUSTLE_COLS, top_n=top_n, sort_by="DEFLECTIONS")
     return df_to_records(df, max_rows=top_n)
 
 
@@ -145,6 +135,7 @@ def _get_defense_stats(
         per_mode_simple=per_mode,
         season_type_all_star=season_type,
         defense_category=defense_category,
+        timeout=API_TIMEOUT,
     )
     df = stats.get_data_frames()[0]
     df = _trim_df(df, top_n=top_n)
@@ -163,6 +154,7 @@ def _get_playtype_stats(
         play_type_nullable=play_type,
         player_or_team_abbreviation="P",
         type_grouping_nullable="offensive",
+        timeout=API_TIMEOUT,
     )
     df = stats.get_data_frames()[0]
     df = _trim_df(df, top_n=top_n)
